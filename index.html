@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>DNA 密码子翻译工具 · 序列操作与对比</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="icon-row">
+                <div class="dna-icon">🧬</div>
+            </div>
+            <h1>DNA 密码子翻译工具</h1>
+            <div class="subtitle">输入 DNA 序列，进行翻译与序列操作对比</div>
+        </header>
+
+        <section class="card">
+            <div class="card-header">
+                <div class="badge input">📥</div>
+                <h2>输入序列</h2>
+                <div class="hint">支持 FASTA 格式；U 会替换为 T</div>
+            </div>
+            <div class="textarea-wrapper" id="textareaWrapper">
+                <textarea id="dnaInput" placeholder="在此粘贴 DNA 序列（A/T/C/G），或拖拽 FASTA / GenBank 文件到此处..."></textarea>
+                <span class="char-count" id="charCount">0 个有效碱基</span>
+            </div>
+            <div class="controls-row">
+                <label class="toggle-switch" title="必须包含起始密码子ATG才进行翻译"><input type="checkbox" id="strictModeCheckbox" checked><span class="toggle-track"></span><span class="toggle-label-text">严格模式</span></label>
+                <span class="label-text" id="readingFrameLabel" style="display:none;">偏移：</span>
+                <div class="segmented disabled" id="readingFrameGroup" style="display:none;"><button data-offset="0" class="active">+1</button><button data-offset="1">+2</button><button data-offset="2">+3</button></div>
+                <div class="spacer"></div>
+                <button class="btn btn-outline" id="btnUpload" title="上传 FASTA / GenBank 文件 (.fa .gb .gbk .txt)">📂 上传</button>
+                <input type="file" id="fileInput" accept=".fasta,.fa,.fna,.gb,.gbk,.txt" style="display:none;">
+                <button class="btn btn-outline" id="btnClear">清空</button>
+                <button class="btn btn-primary" id="btnTranslateParse">翻译/解析</button>
+                <select class="btn btn-sm" id="exampleSelect" style="width:auto;padding:4px 8px;border-radius:6px;">
+                    <option value="">📋 示例...</option>
+                    <option value="anp">示例·ANP</option>
+                    <option value="genbank">示例·GenBank</option>
+                </select>
+                <button class="btn btn-sm" id="btnCopyAA" title="复制氨基酸序列">复制AA</button>
+            </div>
+            <div class="helper-row">支持直接粘贴 NCBI 下载的 GenBank/GBK 记录；程序会自动识别 CDS 区域并进行模拟翻译。</div>
+            <div id="ncbiCdsPanel" class="ncbi-cds-panel" style="display:none;">
+                <div class="ncbi-cds-title">NCBI CDS 解析结果</div>
+                <div id="ncbiCdsSummary" class="ncbi-cds-summary"></div>
+            </div>
+            <div id="inputAlert"></div>
+        </section>
+
+        <section id="resultCard" class="card" style="display:none;">
+            <div class="card-header"><div class="badge result">🧬</div><h2>翻译结果</h2><div class="hint">点击氨基酸可查看详情</div></div>
+            <div id="resultAlert"></div>
+            <div id="seqHighlightContainer" class="seq-highlight-container"><div class="seq-title">序列高亮</div><div id="seqHighlightRow" class="seq-highlight-row"></div></div>
+            <div class="detail-table-wrap"><table class="detail-table"><thead><tr><th>位置</th><th>密码子</th><th>名称</th><th>缩写</th><th>符号</th><th>类别</th><th>标签</th></tr></thead><tbody id="detailTableBody"></tbody></table></div>
+        </section>
+
+        <section id="opsCard" class="card" style="display:none;">
+            <div class="card-header"><div class="badge ops">🧪</div><h2>序列操作</h2><div class="hint">插入 (INS) / 缺失 (DEL) / 替换 (SNP)</div></div>
+            <div class="ops-panel">
+                <div class="ops-group"><label>操作</label><select id="opsType"><option value="insert">插入 (INS)</option><option value="delete">缺失 (DEL)</option><option value="replace">替换 (SNP)</option></select></div>
+                <div class="ops-group"><label id="opsPosLabel">起始位置</label><input id="opsPosStart" type="number" value="1"></div>
+                <div class="ops-group" id="opsPosEndGroup" style="display:none;"><label>结束位置</label><input id="opsPosEnd" type="number" value="1"></div>
+                <div class="ops-group" id="opsSeqGroup"><label id="opsSeqLabel">插入序列</label><input id="opsInsertSeq" type="text"></div>
+                <div class="spacer"></div>
+                <button class="btn btn-purple" id="btnApplyOps">应用</button>
+                <button class="btn btn-ghost" id="btnResetOps">重置</button>
+            </div>
+            <div id="opsAlert"></div>
+            <div class="ops-result-mini" id="opsResultMini" style="display:none;"></div>
+        </section>
+
+        <section id="compareCard" class="card" style="display:none;">
+            <div class="card-header"><div class="badge compare">🔍</div><h2>对比</h2></div>
+            <div id="compareAlert"></div>
+            <div id="structurePanel" class="structure-panel" style="display:none;">
+                <div class="structure-header">
+                    <span class="structure-title">🔬 蛋白质3D结构预测 <span class="structure-badge">ESMFold</span></span>
+                    <span class="structure-hint" id="structureHint"></span>
+                </div>
+                <div id="structureContainer" class="structure-container">
+                    <div id="structureViewerSingle" class="structure-viewer structure-viewer-full" style="display:none;"></div>
+                    <div class="structure-split" id="structureSplit" style="display:none;">
+                        <div class="structure-split-item">
+                            <div class="structure-split-label"><span class="dot-indicator dot-orig"></span>原始结构</div>
+                            <div id="structureViewerOrig" class="structure-viewer structure-viewer-split"></div>
+                        </div>
+                        <div class="structure-split-item">
+                            <div class="structure-split-label"><span class="dot-indicator dot-mod"></span>修改后结构</div>
+                            <div id="structureViewerMod" class="structure-viewer structure-viewer-split"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="structureLoading" class="structure-loading" style="display:none;">
+                    <div class="structure-loading-spinner"></div>
+                    <div>
+                        <div class="structure-loading-text">正在通过 ESMFold 预测蛋白质结构...</div>
+                        <div class="structure-loading-sub" id="structureLoadingSub"></div>
+                    </div>
+                </div>
+                <div id="structureError" class="structure-error" style="display:none;"></div>
+            </div>
+            <div class="compare-grid">
+                <div class="compare-card original-card"><div class="compare-label"><span class="dot-indicator"></span>原始</div><div id="origAaChipsRow" class="aa-chips-row"></div><div id="origStatsRow" class="stats-row"></div><div id="origNoResult" class="no-result">无结果</div></div>
+                <div class="compare-card modified-card"><div class="compare-label"><span class="dot-indicator"></span>修改后</div><div id="modAaChipsRow" class="aa-chips-row"></div><div id="modStatsRow" class="stats-row"></div><div id="modNoResult" class="no-result">无结果</div></div>
+            </div>
+        </section>
+
+        <div class="card" style="margin-top:14px;">
+            <div class="card-header"><div class="badge table">📚</div><h2>密码子参考</h2><div class="hint">查看每个氨基酸对应的密码子</div></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button id="toggleCodonTable" class="btn btn-ghost">切换到传统表格 <span class="arrow">▼</span></button></div>
+            <div id="codonTableContent" class="codon-table-content" style="padding-top:8px;">
+                <div id="codonRefGrid" class="codon-ref-grid"></div>
+                <div id="codonRefTable" class="codon-ref-table-container" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" style="display:block;visibility:hidden;"></div>
+
+    <div id="aaModalOverlay" class="modal-overlay" style="display:none;"><div class="modal-dialog"><div class="modal-header-bar"><div></div><button id="modalCloseBtn" class="modal-close-btn">✕</button></div><div id="modalBodyContent" class="modal-body"></div></div></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
